@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tally Counter</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='115' fill='%230d0e12'/><circle cx='256' cy='256' r='185' fill='none' stroke='%23ffffff' stroke-width='20' stroke-dasharray='68 28.8' stroke-dashoffset='10' stroke-linecap='round'/><line x1='145' y1='256' x2='225' y2='256' stroke='%23ffffff' stroke-width='22' stroke-linecap='round'/><line x1='185' y1='216' x2='185' y2='296' stroke='%23ffffff' stroke-width='22' stroke-linecap='round'/><line x1='287' y1='256' x2='367' y2='256' stroke='%23ffffff' stroke-width='22' stroke-linecap='round'/></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        body, html {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0e12;
+            color: #f3f4f6;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .card-surface {
+            background-color: #e2e8f0;
+            color: #0f172a;
+        }
+        .dark-card-btn {
+            background-color: #2b2f38;
+            color: #ffffff;
+        }
+        .dark-card-btn:active {
+            background-color: #3f4452;
+        }
+        .digit-container {
+            position: relative;
+            height: 1.15em;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .digit-reel {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .digit-reel.animate-up {
+            animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .digit-reel.animate-down {
+            animation: slideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideUp {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-1.15em); }
+        }
+        @keyframes slideDown {
+            0% { transform: translateY(-1.15em); }
+            100% { transform: translateY(0); }
+        }
+        .digit-num {
+            height: 1.15em;
+            line-height: 1.15em;
+            text-align: center;
+        }
+        .btn-press-micro {
+            transition: transform 0.08s ease;
+        }
+        .btn-press-micro:active {
+            transform: scale(0.92);
+        }
+        .custom-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background-color: #27272a;
+            border-radius: 9999px;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+        .custom-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: #ffffff;
+            border-radius: 9999px;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        input:checked + .custom-switch {
+            background-color: #10b981;
+        }
+        input:checked + .custom-switch::after {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body class="h-full w-full bg-[#0d0e12] text-gray-100 flex flex-col justify-between overflow-hidden">
+
+    <div id="app" class="relative h-full w-full max-w-md mx-auto flex flex-col overflow-hidden bg-[#0d0e12]">
+
+        <section id="tab-counters" class="tab-content flex-1 flex flex-col h-full overflow-hidden">
+            <header class="p-3 shrink-0 flex items-center justify-between border-b border-zinc-800/60">
+                <h1 class="text-lg font-bold text-gray-100 pl-2">Мои счётчики</h1>
+                <div class="flex items-center gap-1">
+                    <button id="btn-open-search" class="p-2 rounded-full hover:bg-zinc-800 text-gray-300">
+                        <i data-lucide="search" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div id="search-bar-container" class="hidden px-3 pt-2 shrink-0">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-zinc-400"></i>
+                    <input type="text" id="search-input" placeholder="Поиск счётчика..." 
+                        class="w-full pl-9 pr-4 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-gray-200 focus:outline-none focus:border-zinc-600">
+                </div>
+            </div>
+
+            <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3" id="counters-container"></main>
+        </section>
+
+        <section id="tab-stats" class="tab-content hidden flex-1 flex flex-col h-full overflow-hidden p-3">
+            <header class="pb-3 shrink-0 border-b border-zinc-800/60 flex items-center justify-between gap-2">
+                <h1 class="text-lg font-bold text-gray-100 shrink-0">Статистика</h1>
+                <input type="date" id="stats-date-picker" class="bg-zinc-900 border border-zinc-800 text-xs text-white px-2 py-1 rounded-lg focus:outline-none">
+            </header>
+
+            <div class="flex-1 overflow-y-auto pt-3 space-y-4">
+                <div class="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-2.5">
+                    <label class="text-[10px] text-zinc-400 block mb-1 uppercase font-semibold tracking-wider">Фильтр по счётчику</label>
+                    <select id="stats-counter-filter" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white px-3 py-2 focus:outline-none">
+                        <option value="all">Все счётчики</option>
+                    </select>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-around">
+                    <div class="text-center">
+                        <span class="text-xs text-zinc-400 block mb-0.5">Всего за всё время</span>
+                        <span id="stat-total-clicks" class="text-xl font-black text-white">0</span>
+                    </div>
+                    <div class="w-[1px] h-8 bg-zinc-800"></div>
+                    <div class="text-center">
+                        <span class="text-xs text-zinc-400 block mb-0.5">За выбранный день</span>
+                        <span id="stat-selected-day-sum" class="text-xl font-black text-white">0</span>
+                    </div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                    <h3 class="text-xs font-semibold text-zinc-400 mb-3">Динамика за 7 дней</h3>
+                    <div class="h-36 relative">
+                        <canvas id="statsChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                    <h3 class="text-xs font-semibold text-zinc-400">Детализация</h3>
+                    <div id="stats-counters-breakdown" class="space-y-2 text-sm text-zinc-300"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-settings" class="tab-content hidden flex-1 flex flex-col h-full overflow-hidden p-3">
+            <header class="pb-3 shrink-0 border-b border-zinc-800/60">
+                <h1 class="text-lg font-bold text-gray-100">Настройки</h1>
+            </header>
+
+            <div class="flex-1 overflow-y-auto pt-4 space-y-4">
+                <div class="bg-zinc-900 rounded-2xl border border-zinc-800/80 divide-y divide-zinc-800/60 overflow-hidden">
+                    <div class="p-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-zinc-800 rounded-xl text-zinc-300">
+                                <i data-lucide="vibrate" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-sm font-medium text-zinc-200">Вибрация</span>
+                        </div>
+                        <label class="relative inline-flex items-center">
+                            <input type="checkbox" id="setting-vibration" class="sr-only" checked>
+                            <div class="custom-switch"></div>
+                        </label>
+                    </div>
+
+                    <div class="p-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-zinc-800 rounded-xl text-zinc-300">
+                                <i data-lucide="volume-2" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-sm font-medium text-zinc-200">Звук щелчка</span>
+                        </div>
+                        <label class="relative inline-flex items-center">
+                            <input type="checkbox" id="setting-sound" class="sr-only" checked>
+                            <div class="custom-switch"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-zinc-900 rounded-2xl p-4 border border-zinc-800/80 space-y-3">
+                    <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Резервное копирование</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-export-data" class="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors active:scale-95">
+                            <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Экспорт JSON
+                        </button>
+                        <button id="btn-import-trigger" class="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors active:scale-95">
+                            <i data-lucide="upload" class="w-4 h-4 text-sky-400"></i> Импорт JSON
+                        </button>
+                        <input type="file" id="import-file-input" accept=".json" class="hidden">
+                    </div>
+                </div>
+
+                <div class="bg-zinc-900/50 rounded-2xl p-4 border border-zinc-800/50 flex items-center gap-3">
+                    <i data-lucide="database" class="w-5 h-5 text-zinc-400 shrink-0"></i>
+                    <p class="text-xs text-zinc-400 leading-relaxed">
+                        Все данные и история измерений сохраняются локально на вашем устройстве.
+                    </p>
+                </div>
+
+                <div class="pt-2">
+                    <button id="btn-clear-all" class="w-full py-3 bg-rose-950/30 border border-rose-900/40 text-rose-300 rounded-2xl text-xs font-semibold hover:bg-rose-900/50 transition-colors flex items-center justify-center gap-2 active:scale-98">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Сбросить все данные
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <nav class="shrink-0 bg-zinc-950 border-t border-zinc-800/80 px-2 py-2 flex items-center justify-around z-10">
+            <button onclick="switchTab('counters')" id="nav-btn-counters" class="flex flex-col items-center gap-0.5 text-white">
+                <i data-lucide="hash" class="w-5 h-5"></i>
+                <span class="text-[10px] font-medium">Счётчики</span>
+            </button>
+            <button onclick="openAddModal()" class="relative -top-3 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                <i data-lucide="plus" class="w-6 h-6 stroke-[3]"></i>
+            </button>
+            <button onclick="switchTab('stats')" id="nav-btn-stats" class="flex flex-col items-center gap-0.5 text-zinc-500">
+                <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+                <span class="text-[10px] font-medium">Статистика</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-btn-settings" class="flex flex-col items-center gap-0.5 text-zinc-500">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="text-[10px] font-medium">Настройки</span>
+            </button>
+        </nav>
+
+        <section id="view-detail" class="hidden fixed inset-0 bg-[#121318] flex flex-col justify-between z-20 max-w-md mx-auto">
+            <header class="p-3 shrink-0 flex items-center justify-between border-b border-zinc-800/40">
+                <button id="btn-back-to-list" class="p-2 rounded-full hover:bg-zinc-800 text-gray-300">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </button>
+                <div class="text-center">
+                    <h2 id="detail-counter-title" class="text-base font-bold text-gray-100 truncate max-w-[180px]">Счётчик</h2>
+                    <span id="detail-reset-period" class="text-[10px] text-zinc-400 block"></span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button id="btn-reset-counter" class="p-2 rounded-full hover:bg-zinc-800 text-gray-400 hover:text-white">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                    </button>
+                    <button id="btn-edit-counter" class="p-2 rounded-full hover:bg-zinc-800 text-gray-400 hover:text-white">
+                        <i data-lucide="pencil" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 flex items-center justify-center">
+                <div id="detail-counter-value" class="text-7xl font-black text-white tracking-tight flex items-center justify-center"></div>
+            </div>
+
+            <div class="p-4 space-y-3 pb-6 shrink-0">
+                <button id="btn-big-plus" class="w-full h-32 card-surface rounded-3xl flex items-center justify-center shadow-2xl btn-press-micro cursor-pointer">
+                    <i data-lucide="plus" class="w-14 h-14 text-slate-900 stroke-[3]"></i>
+                </button>
+
+                <div class="grid grid-cols-5 gap-2">
+                    <button id="btn-sub-lock" class="col-span-1 bg-zinc-800/80 text-gray-300 rounded-2xl h-12 flex items-center justify-center btn-press-micro">
+                        <i id="lock-icon" data-lucide="unlock" class="w-5 h-5"></i>
+                    </button>
+                    <button id="btn-big-minus" class="col-span-3 bg-zinc-800 text-white rounded-2xl h-12 flex items-center justify-center btn-press-micro">
+                        <i data-lucide="minus" class="w-6 h-6 stroke-[3]"></i>
+                    </button>
+                    <button id="btn-big-undo" class="col-span-1 bg-rose-900/60 text-rose-200 rounded-2xl h-12 flex items-center justify-center btn-press-micro">
+                        <i data-lucide="undo-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <div id="modal-counter" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+                <h3 id="modal-title" class="text-base font-bold text-white">Новый счётчик</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-zinc-400 mb-1 block">Название</label>
+                        <input type="text" id="modal-input-title" placeholder="Например: Отжимания..." class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm focus:outline-none focus:border-zinc-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-zinc-400 mb-1 block">Начальное знач.</label>
+                            <input type="number" id="modal-input-value" value="0" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-zinc-400 mb-1 block">Шаг</label>
+                            <input type="number" id="modal-input-step" value="1" min="1" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-zinc-400 mb-1 block">Автообнуление (период)</label>
+                        <select id="modal-input-reset-period" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm focus:outline-none">
+                            <option value="none">Без обнуления</option>
+                            <option value="hourly">Раз в час</option>
+                            <option value="daily">Раз в день</option>
+                            <option value="weekly">Раз в неделю</option>
+                            <option value="monthly">Раз в месяц</option>
+                            <option value="yearly">Раз в год</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button id="modal-btn-cancel" class="px-4 py-2 text-xs text-zinc-400 hover:text-white rounded-xl">Отмена</button>
+                    <button id="modal-btn-save" class="px-4 py-2 text-xs bg-white text-black font-semibold rounded-xl hover:bg-gray-200">Сохранить</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        class SoundFX {
+            constructor() { this.ctx = null; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            playClick() {
+                if (!appSettings.sound) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.04);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.04);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.04);
+                } catch (e) {}
+            }
+        }
+        const audioFX = new SoundFX();
+
+        let counters = [];
+        let statsLog = [];
+        let activeCounterId = null;
+        let counterHistory = [];
+        let editingCounterId = null;
+        let isLocked = false;
+        let statsChartInstance = null;
+        let previousDisplayedValueStr = null;
+
+        let appSettings = { vibration: true, sound: true };
+
+        function loadData() {
+            const savedCounters = localStorage.getItem('tally_counters_v3');
+            const savedSettings = localStorage.getItem('tally_settings_v3');
+            const savedStats = localStorage.getItem('tally_stats_v3');
+
+            if (savedCounters) {
+                try { counters = JSON.parse(savedCounters); } catch(e) { counters = []; }
+            } else {
+                counters = [];
+            }
+
+            if (savedSettings) try { appSettings = { ...appSettings, ...JSON.parse(savedSettings) }; } catch(e){}
+            if (savedStats) try { statsLog = JSON.parse(savedStats); } catch(e){ statsLog = []; }
+
+            document.getElementById('setting-vibration').checked = appSettings.vibration;
+            document.getElementById('setting-sound').checked = appSettings.sound;
+
+            checkAutoResets();
+        }
+
+        function saveData() {
+            localStorage.setItem('tally_counters_v3', JSON.stringify(counters));
+            localStorage.setItem('tally_settings_v3', JSON.stringify(appSettings));
+            localStorage.setItem('tally_stats_v3', JSON.stringify(statsLog));
+        }
+
+        function checkAutoResets() {
+            const now = new Date();
+            let changed = false;
+
+            counters.forEach(c => {
+                if (!c.resetPeriod || c.resetPeriod === 'none') return;
+                const last = c.lastReset ? new Date(c.lastReset) : new Date(0);
+
+                let shouldReset = false;
+                if (c.resetPeriod === 'hourly' && (now - last) >= 3600000) shouldReset = true;
+                else if (c.resetPeriod === 'daily' && now.toDateString() !== last.toDateString()) shouldReset = true;
+                else if (c.resetPeriod === 'weekly' && (now - last) >= 604800000) shouldReset = true;
+                else if (c.resetPeriod === 'monthly' && now.getMonth() !== last.getMonth()) shouldReset = true;
+                else if (c.resetPeriod === 'yearly' && now.getFullYear() !== last.getFullYear()) shouldReset = true;
+
+                if (shouldReset) {
+                    c.value = 0;
+                    c.lastReset = Date.now();
+                    changed = true;
+                }
+            });
+
+            if (changed) saveData();
+        }
+
+        function triggerFeedback() {
+            if (appSettings.vibration && navigator.vibrate) navigator.vibrate(12);
+            if (appSettings.sound) audioFX.playClick();
+        }
+
+        function renderReels(number, direction = 'up', forceRebuild = false) {
+            const container = document.getElementById('detail-counter-value');
+            const newStr = number.toString();
+            
+            if (forceRebuild || !previousDisplayedValueStr || previousDisplayedValueStr.length !== newStr.length) {
+                container.innerHTML = '';
+                for (let i = 0; i < newStr.length; i++) {
+                    const char = newStr[i];
+                    if (/\d/.test(char)) {
+                        const digitBox = document.createElement('div');
+                        digitBox.className = 'digit-container';
+                        digitBox.innerHTML = `<div class="digit-reel"><div class="digit-num">${char}</div></div>`;
+                        container.appendChild(digitBox);
+                    } else {
+                        const sign = document.createElement('span');
+                        sign.innerText = char;
+                        container.appendChild(sign);
+                    }
+                }
+                previousDisplayedValueStr = newStr;
+                return;
+            }
+
+            const reels = container.querySelectorAll('.digit-reel');
+            let reelIdx = 0;
+
+            for (let i = 0; i < newStr.length; i++) {
+                const newChar = newStr[i];
+                if (!/\d/.test(newChar)) continue;
+
+                const reel = reels[reelIdx++];
+                const prevChar = previousDisplayedValueStr[i] || '0';
+
+                if (prevChar !== newChar) {
+                    reel.classList.remove('animate-up', 'animate-down');
+                    
+                    if (direction === 'up') {
+                        reel.innerHTML = `<div class="digit-num">${prevChar}</div><div class="digit-num">${newChar}</div>`;
+                        void reel.offsetWidth;
+                        reel.classList.add('animate-up');
+                    } else {
+                        reel.innerHTML = `<div class="digit-num">${newChar}</div><div class="digit-num">${prevChar}</div>`;
+                        void reel.offsetWidth;
+                        reel.classList.add('animate-down');
+                    }
+                }
+            }
+
+            previousDisplayedValueStr = newStr;
+        }
+
+        function renderCountersList() {
+            const container = document.getElementById('counters-container');
+            const searchVal = document.getElementById('search-input').value.toLowerCase().trim();
+            container.innerHTML = '';
+
+            const filtered = counters.filter(c => c.title.toLowerCase().includes(searchVal));
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 text-zinc-500 text-sm">Нет счётчиков</div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            filtered.forEach(c => {
+                const card = document.createElement('div');
+                card.className = "card-surface rounded-2xl p-4 shadow-md flex items-center justify-between gap-3 cursor-pointer hover:brightness-105 transition-all";
+                card.innerHTML = `
+                    <div class="flex-1 min-w-0" onclick="openDetailView('${c.id}')">
+                        <h3 class="font-bold text-base text-slate-900 truncate">${escapeHtml(c.title)}</h3>
+                        <span class="text-3xl font-black text-slate-950">${c.value}</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="event.stopPropagation(); changeCounterValue('${c.id}', -${c.step})" class="w-10 h-10 rounded-xl bg-slate-300 text-slate-900 flex items-center justify-center font-bold text-xl btn-press-micro">
+                            <i data-lucide="minus" class="w-5 h-5 stroke-[3]"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); changeCounterValue('${c.id}', ${c.step})" class="w-14 h-10 rounded-xl dark-card-btn flex items-center justify-center font-bold text-xl btn-press-micro">
+                            <i data-lucide="plus" class="w-6 h-6 stroke-[3]"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.innerText = text;
+            return div.innerHTML;
+        }
+
+        function changeCounterValue(id, delta) {
+            const counter = counters.find(c => c.id === id);
+            if (!counter) return;
+
+            counterHistory.push({ id: counter.id, prevValue: counter.value });
+            if (counterHistory.length > 20) counterHistory.shift();
+
+            counter.value += delta;
+            saveData();
+            triggerFeedback();
+
+            statsLog.push({
+                counterId: counter.id,
+                title: counter.title,
+                timestamp: Date.now(),
+                delta: delta
+            });
+            saveData();
+
+            if (activeCounterId === id) {
+                renderReels(counter.value, delta > 0 ? 'up' : 'down');
+            }
+            renderCountersList();
+        }
+
+        function openDetailView(id) {
+            activeCounterId = id;
+            const counter = counters.find(c => c.id === activeCounterId);
+            if (!counter) return;
+
+            document.getElementById('detail-counter-title').innerText = counter.title;
+            const periodLabels = { hourly: 'Обнуление: Раз в час', daily: 'Обнуление: Каждый день', weekly: 'Обнуление: Раз в неделю', monthly: 'Обнуление: Раз в месяц', yearly: 'Обнуление: Раз в год' };
+            document.getElementById('detail-reset-period').innerText = periodLabels[counter.resetPeriod] || '';
+            
+            previousDisplayedValueStr = null;
+            renderReels(counter.value, 'up', true);
+            document.getElementById('view-detail').classList.remove('hidden');
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            ['counters', 'stats', 'settings'].forEach(t => {
+                const btn = document.getElementById(`nav-btn-${t}`);
+                if (btn) {
+                    if (t === tabName) btn.className = 'flex flex-col items-center gap-0.5 text-white';
+                    else btn.className = 'flex flex-col items-center gap-0.5 text-zinc-500';
+                }
+            });
+
+            if (tabName === 'stats') {
+                updateStatsCounterFilterOptions();
+                renderStats();
+            }
+        }
+
+        function openAddModal() {
+            editingCounterId = null;
+            document.getElementById('modal-title').innerText = "Новый счётчик";
+            document.getElementById('modal-input-title').value = "";
+            document.getElementById('modal-input-value').value = 0;
+            document.getElementById('modal-input-step').value = 1;
+            document.getElementById('modal-input-reset-period').value = "none";
+            document.getElementById('modal-counter').classList.remove('hidden');
+        }
+
+        function updateStatsCounterFilterOptions() {
+            const select = document.getElementById('stats-counter-filter');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="all">Все счётчики</option>';
+            counters.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.innerText = c.title;
+                select.appendChild(opt);
+            });
+            if (counters.some(c => c.id === currentVal)) {
+                select.value = currentVal;
+            } else {
+                select.value = 'all';
+            }
+        }
+
+        function renderStats() {
+            const picker = document.getElementById('stats-date-picker');
+            if (!picker.value) {
+                picker.value = new Date().toISOString().split('T')[0];
+            }
+            const selectedDateStr = new Date(picker.value).toDateString();
+            const selectedCounterId = document.getElementById('stats-counter-filter').value;
+
+            const filteredLog = statsLog.filter(s => selectedCounterId === 'all' || s.counterId === selectedCounterId);
+
+            const totalSumAllTime = filteredLog.reduce((acc, log) => acc + log.delta, 0);
+            document.getElementById('stat-total-clicks').innerText = totalSumAllTime;
+
+            const dayLogs = filteredLog.filter(s => new Date(s.timestamp).toDateString() === selectedDateStr);
+            const selectedDaySum = dayLogs.reduce((acc, log) => acc + log.delta, 0);
+            document.getElementById('stat-selected-day-sum').innerText = selectedDaySum > 0 ? `+${selectedDaySum}` : selectedDaySum;
+
+            const breakdownContainer = document.getElementById('stats-counters-breakdown');
+            breakdownContainer.innerHTML = '';
+
+            const counterSums = {};
+            dayLogs.forEach(log => {
+                if (!counterSums[log.counterId]) {
+                    counterSums[log.counterId] = { title: log.title, sum: 0, clicks: 0 };
+                }
+                counterSums[log.counterId].sum += log.delta;
+                counterSums[log.counterId].clicks += 1;
+            });
+
+            const entries = Object.values(counterSums);
+            if (entries.length === 0) {
+                breakdownContainer.innerHTML = `<p class="text-xs text-zinc-500 py-2">За этот день нет активностей</p>`;
+            } else {
+                entries.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = "flex items-center justify-between p-2.5 bg-zinc-950/60 rounded-xl border border-zinc-800/50";
+                    el.innerHTML = `
+                        <div>
+                            <span class="font-semibold text-xs text-zinc-200 block">${escapeHtml(item.title)}</span>
+                            <span class="text-[10px] text-zinc-500">Действий: ${item.clicks}</span>
+                        </div>
+                        <span class="font-black text-sm ${item.sum > 0 ? 'text-emerald-400' : item.sum < 0 ? 'text-rose-400' : 'text-zinc-400'}">
+                            ${item.sum > 0 ? '+' : ''}${item.sum}
+                        </span>
+                    `;
+                    breakdownContainer.appendChild(el);
+                });
+            }
+
+            renderChart(filteredLog);
+        }
+
+        function renderChart(logs) {
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            
+            const days = [];
+            const sums = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dayStr = d.toDateString();
+                days.push(d.toLocaleDateString([], { weekday: 'short' }));
+                
+                const daySum = logs
+                    .filter(s => new Date(s.timestamp).toDateString() === dayStr)
+                    .reduce((acc, log) => acc + log.delta, 0);
+                sums.push(daySum);
+            }
+
+            if (statsChartInstance) statsChartInstance.destroy();
+
+            statsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        data: sums,
+                        backgroundColor: sums.map(v => v >= 0 ? '#ffffff' : '#f43f5e'),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#a1a1aa', font: { size: 10 } } },
+                        y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function exportBackupJSON() {
+            const backupData = {
+                version: "3.0",
+                exportDate: new Date().toISOString(),
+                settings: appSettings,
+                counters: counters,
+                statsLog: statsLog
+            };
+
+            const jsonStr = JSON.stringify(backupData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tally_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importBackupJSON(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported.counters && Array.isArray(imported.counters) && imported.statsLog && Array.isArray(imported.statsLog)) {
+                        counters = imported.counters;
+                        statsLog = imported.statsLog;
+                        if (imported.settings) appSettings = { ...appSettings, ...imported.settings };
+
+                        saveData();
+                        document.getElementById('setting-vibration').checked = appSettings.vibration;
+                        document.getElementById('setting-sound').checked = appSettings.sound;
+
+                        renderCountersList();
+                        alert('Данные успешно импортированы!');
+                    } else {
+                        alert('Неверный формат JSON файла!');
+                    }
+                } catch(err) {
+                    alert('Ошибка чтения файла!');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            renderCountersList();
+
+            document.getElementById('stats-date-picker').addEventListener('change', renderStats);
+            document.getElementById('stats-counter-filter').addEventListener('change', renderStats);
+
+            document.getElementById('btn-open-search').addEventListener('click', () => {
+                const search = document.getElementById('search-bar-container');
+                search.classList.toggle('hidden');
+            });
+            document.getElementById('search-input').addEventListener('input', renderCountersList);
+
+            document.getElementById('btn-back-to-list').addEventListener('click', () => {
+                document.getElementById('view-detail').classList.add('hidden');
+                activeCounterId = null;
+            });
+
+            document.getElementById('btn-big-plus').addEventListener('click', () => {
+                if (isLocked || !activeCounterId) return;
+                const counter = counters.find(c => c.id === activeCounterId);
+                if (counter) changeCounterValue(counter.id, counter.step);
+            });
+
+            document.getElementById('btn-big-minus').addEventListener('click', () => {
+                if (isLocked || !activeCounterId) return;
+                const counter = counters.find(c => c.id === activeCounterId);
+                if (counter) changeCounterValue(counter.id, -counter.step);
+            });
+
+            document.getElementById('btn-big-undo').addEventListener('click', () => {
+                if (isLocked || counterHistory.length === 0) return;
+                const last = counterHistory.pop();
+                const counter = counters.find(c => c.id === last.id);
+                if (counter) {
+                    const delta = last.prevValue - counter.value;
+                    counter.value = last.prevValue;
+                    saveData();
+                    triggerFeedback();
+                    
+                    statsLog.push({ counterId: counter.id, title: counter.title, timestamp: Date.now(), delta: delta });
+                    saveData();
+
+                    renderReels(counter.value, delta > 0 ? 'up' : 'down');
+                    renderCountersList();
+                }
+            });
+
+            document.getElementById('btn-sub-lock').addEventListener('click', () => {
+                isLocked = !isLocked;
+                const lockIcon = document.getElementById('lock-icon');
+                if (isLocked) {
+                    lockIcon.setAttribute('data-lucide', 'lock');
+                    document.getElementById('btn-big-plus').classList.add('opacity-40');
+                } else {
+                    lockIcon.setAttribute('data-lucide', 'unlock');
+                    document.getElementById('btn-big-plus').classList.remove('opacity-40');
+                }
+                lucide.createIcons();
+            });
+
+            document.getElementById('btn-reset-counter').addEventListener('click', () => {
+                if (!activeCounterId) return;
+                if (confirm('Сбросить счётчик на 0?')) {
+                    const counter = counters.find(c => c.id === activeCounterId);
+                    if (counter) {
+                        const delta = -counter.value;
+                        counter.value = 0;
+                        saveData();
+
+                        statsLog.push({ counterId: counter.id, title: counter.title, timestamp: Date.now(), delta: delta });
+                        saveData();
+
+                        previousDisplayedValueStr = null;
+                        renderReels(0, 'down', true);
+                        renderCountersList();
+                    }
+                }
+            });
+
+            document.getElementById('btn-edit-counter').addEventListener('click', () => {
+                if (!activeCounterId) return;
+                const counter = counters.find(c => c.id === activeCounterId);
+                if (!counter) return;
+
+                editingCounterId = counter.id;
+                document.getElementById('modal-title').innerText = "Редактировать";
+                document.getElementById('modal-input-title').value = counter.title;
+                document.getElementById('modal-input-value').value = counter.value;
+                document.getElementById('modal-input-step').value = counter.step || 1;
+                document.getElementById('modal-input-reset-period').value = counter.resetPeriod || "none";
+                document.getElementById('modal-counter').classList.remove('hidden');
+            });
+
+            document.getElementById('modal-btn-cancel').addEventListener('click', () => {
+                document.getElementById('modal-counter').classList.add('hidden');
+            });
+
+            document.getElementById('modal-btn-save').addEventListener('click', () => {
+                const title = document.getElementById('modal-input-title').value.trim() || "Счётчик";
+                const val = parseInt(document.getElementById('modal-input-value').value) || 0;
+                const step = Math.max(1, parseInt(document.getElementById('modal-input-step').value) || 1);
+                const period = document.getElementById('modal-input-reset-period').value;
+
+                if (editingCounterId) {
+                    const counter = counters.find(c => c.id === editingCounterId);
+                    if (counter) {
+                        counter.title = title;
+                        counter.value = val;
+                        counter.step = step;
+                        counter.resetPeriod = period;
+                    }
+                } else {
+                    counters.push({
+                        id: Date.now().toString(),
+                        title: title,
+                        value: val,
+                        step: step,
+                        resetPeriod: period,
+                        lastReset: Date.now()
+                    });
+                }
+
+                saveData();
+                renderCountersList();
+                if (activeCounterId) openDetailView(activeCounterId);
+                document.getElementById('modal-counter').classList.add('hidden');
+            });
+
+            document.getElementById('setting-vibration').addEventListener('change', (e) => { appSettings.vibration = e.target.checked; saveData(); });
+            document.getElementById('setting-sound').addEventListener('change', (e) => { appSettings.sound = e.target.checked; saveData(); });
+
+            document.getElementById('btn-export-data').addEventListener('click', exportBackupJSON);
+            document.getElementById('btn-import-trigger').addEventListener('click', () => {
+                document.getElementById('import-file-input').click();
+            });
+            document.getElementById('import-file-input').addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    importBackupJSON(e.target.files[0]);
+                }
+            });
+
+            document.getElementById('btn-clear-all').addEventListener('click', () => {
+                if (confirm('Удалить ВСЕ данные и статистику?')) {
+                    counters = [];
+                    statsLog = [];
+                    saveData();
+                    renderCountersList();
+                    switchTab('counters');
+                }
+            });
+        });
+
+        window.addEventListener('load', () => lucide.createIcons());
+    </script>
+</body>
+</html>
