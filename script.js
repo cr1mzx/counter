@@ -550,17 +550,16 @@ function renderStats() {
         periodStartTime = startOfMonth.getTime();
         periodEndTime = endOfMonth.getTime();
     } else if (currentStatsPeriod === '6m') {
-        // Логика полугодий: Янв-Июн (месяцы 0-5) или Июл-Дек (месяцы 6-11)
         const year = selectedDate.getFullYear();
         const currentMonth = selectedDate.getMonth();
         let startMonth, endMonth;
         
         if (currentMonth <= 5) {
-            startMonth = 0; // Январь
-            endMonth = 5;   // Июнь
+            startMonth = 0;
+            endMonth = 5;
         } else {
-            startMonth = 6; // Июль
-            endMonth = 11;  // Декабрь
+            startMonth = 6;
+            endMonth = 11;
         }
         
         const startOf6m = new Date(year, startMonth, 1, 0, 0, 0, 0);
@@ -583,23 +582,22 @@ function renderStats() {
 
     const hourCounts = {};
     currentFilteredPeriodLogs.forEach(log => {
-        if (log.delta > 0) {
-            const hour = new Date(log.timestamp).getHours();
-            hourCounts[hour] = (hourCounts[hour] || 0) + log.delta;
-        }
+        const hour = new Date(log.timestamp).getHours();
+        hourCounts[hour] = (hourCounts[hour] || 0) + log.delta;
     });
 
     let peakHour = null;
     let maxCount = 0;
     for (const [hour, count] of Object.entries(hourCounts)) {
-        if (count > maxCount) {
-            maxCount = count;
+        const actualCount = Math.max(0, count);
+        if (actualCount > maxCount) {
+            maxCount = actualCount;
             peakHour = hour;
         }
     }
 
     if (peakHour !== null) {
-        const hourFormatted = `${peakHour.padStart(2, '0')}:00 - ${(parseInt(peakHour) + 1).toString().padStart(2, '0')}:00`;
+        const hourFormatted = `${peakHour.toString().padStart(2, '0')}:00 - ${(parseInt(peakHour) + 1).toString().padStart(2, '0')}:00`;
         document.getElementById('stat-peak-hour').innerText = hourFormatted;
         document.getElementById('stat-peak-count').innerText = `${maxCount} нажатий`;
     } else {
@@ -680,12 +678,6 @@ function closeFullHistoryModal() {
     document.getElementById('modal-full-history').classList.add('hidden');
 }
 
-function resetChartZoom() {
-    if (statsChartInstance) {
-        statsChartInstance.resetZoom();
-    }
-}
-
 function renderChart(logs, startTime, endTime, selectedDate) {
     const ctx = document.getElementById('statsChart').getContext('2d');
     const chartTitle = document.getElementById('chart-title');
@@ -752,7 +744,6 @@ function renderChart(logs, startTime, endTime, selectedDate) {
                 sums.push(Math.max(0, monthSum));
             }
         } else {
-            // Период 6 месяцев (Январь - Июнь ИЛИ Июль - Декабрь)
             const year = selectedDate.getFullYear();
             const currentMonth = selectedDate.getMonth();
             let startMonth = (currentMonth <= 5) ? 0 : 6;
@@ -802,23 +793,11 @@ function renderChart(logs, startTime, endTime, selectedDate) {
             plugins: { 
                 legend: { display: false },
                 zoom: {
-                    pan: {
-                        enabled: true,
-                        mode: 'x'
-                    },
+                    pan: { enabled: false },
                     zoom: {
-                        wheel: { 
-                            enabled: true, 
-                            speed: 0.05 // Снижаем скорость зума колесиком для плавности
-                        },
-                        pinch: { 
-                            enabled: true // Плавный зум пальцами с телефона
-                        },
-                        mode: 'x',
-                        limits: {
-                            y: { min: 0 }, // Запрещаем опускаться ниже нуля
-                            x: { minRange: 3 } // Не даем приблизить сильнее, чем до 3 точек, чтобы график не «взрывался»
-                        }
+                        wheel: { enabled: false },
+                        pinch: { enabled: false },
+                        mode: null
                     }
                 }
             },
@@ -830,7 +809,7 @@ function renderChart(logs, startTime, endTime, selectedDate) {
                 y: { 
                     grid: { color: '#27272a' }, 
                     ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 },
-                    min: 0 // Жестко фиксируем нижнюю границу шкалы, исключая появление -1
+                    min: 0
                 }
             }
         }
@@ -1003,7 +982,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const step = Math.max(1, parseInt(document.getElementById('modal-input-step').value) || 1);
         const period = document.getElementById('modal-input-reset-period').value;
 
-        // Если поле названия пустое, по умолчанию ставим «Счётчик»[cite: 13]
         if (!rawTitle) {
             rawTitle = "Счётчик";
         }
@@ -1017,11 +995,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 counter.color = selectedColorTheme;
             }
         } else {
-            // Логика авто-нумерации при создании одинаковых названий в текущей группе[cite: 13]
             const groupCounters = counters.filter(c => (c.groupId || 'default') === activeGroupId);
             let finalTitle = rawTitle;
             
-            // Проверим, существует ли уже точное совпадение или совпадение с #номер
             const existingTitles = new Set(groupCounters.map(c => c.title));
             
             if (existingTitles.has(finalTitle)) {
