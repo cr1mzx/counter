@@ -807,15 +807,31 @@ function renderChart(logs, startTime, endTime, selectedDate) {
                         mode: 'x'
                     },
                     zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        mode: 'x'
+                        wheel: { 
+                            enabled: true, 
+                            speed: 0.05 // Снижаем скорость зума колесиком для плавности
+                        },
+                        pinch: { 
+                            enabled: true // Плавный зум пальцами с телефона
+                        },
+                        mode: 'x',
+                        limits: {
+                            y: { min: 0 }, // Запрещаем опускаться ниже нуля
+                            x: { minRange: 3 } // Не даем приблизить сильнее, чем до 3 точек, чтобы график не «взрывался»
+                        }
                     }
                 }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: '#a1a1aa', font: { size: 9 } } },
-                y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 } }
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#a1a1aa', font: { size: 9 } } 
+                },
+                y: { 
+                    grid: { color: '#27272a' }, 
+                    ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 },
+                    min: 0 // Жестко фиксируем нижнюю границу шкалы, исключая появление -1
+                }
             }
         }
     });
