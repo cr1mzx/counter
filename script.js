@@ -47,6 +47,14 @@ let currentFilteredPeriodLogs = [];
 
 let appSettings = { vibration: true, sound: true };
 
+// Вспомогательная функция для получения текущей даты в формате YYYY-MM-DD по местному времени
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function loadData() {
     const savedGroups = localStorage.getItem('tally_groups_v4');
     const savedActiveGroup = localStorage.getItem('tally_active_group_v4');
@@ -506,10 +514,15 @@ function setStatsPeriod(period) {
 
 function renderStats() {
     const picker = document.getElementById('stats-date-picker');
-    if (!picker.value) {
-        picker.value = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
+    
+    // Автоматически обновляем дату в пикере наступившего дня, если дата не выбрана пользователем вручную или если наступил новый день
+    if (!picker.value || picker.dataset.autoDate === picker.value || picker.value < todayStr) {
+        picker.value = todayStr;
+        picker.dataset.autoDate = todayStr;
     }
-    const selectedDate = new Date(picker.value);
+
+    const selectedDate = new Date(picker.value + 'T00:00:00');
     const selectedCounterId = document.getElementById('stats-counter-filter').value;
 
     const groupCounters = counters.filter(c => (c.groupId || 'default') === activeGroupId);
@@ -621,7 +634,7 @@ function renderStats() {
             const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             const item = document.createElement('div');
-            item.className = "flex items-center justify-between text-xs py-1.5 px-2.5 bg-zinc-950/60 rounded-lg border border-zinc-800/40";
+            item.className = "flex items-center justify-between text-xs py-1.5 px-2.5 bg-zinc-900/60 rounded-lg border border-zinc-800/40";
             item.innerHTML = `
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="text-[10px] text-zinc-500 font-mono shrink-0">${timeStr}</span>
@@ -875,6 +888,14 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     renderCountersList();
 
+    // Инициализируем дату в пикере при запуске приложения
+    const picker = document.getElementById('stats-date-picker');
+    if (picker) {
+        const todayStr = getLocalDateString();
+        picker.value = todayStr;
+        picker.dataset.autoDate = todayStr;
+    }
+
     document.getElementById('btn-toggle-groups-menu').addEventListener('click', (e) => {
         e.stopPropagation();
         toggleGroupsMenu();
@@ -893,7 +914,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    document.getElementById('stats-date-picker').addEventListener('change', renderStats);
+    document.getElementById('stats-date-picker').addEventListener('change', (e) => {
+        // Если пользователь явно выбрал дату вручную, снимаем флаг автообновления
+        e.target.dataset.autoDate = '';
+        renderStats();
+    });
     document.getElementById('stats-counter-filter').addEventListener('change', renderStats);
 
     document.getElementById('btn-open-search').addEventListener('click', () => {
