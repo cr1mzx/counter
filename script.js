@@ -56,11 +56,11 @@ function getLocalDateString(date = new Date()) {
 }
 
 function loadData() {
-    const savedGroups = localStorage.getItem('tally_groups_v4');
-    const savedActiveGroup = localStorage.getItem('tally_active_group_v4');
-    const savedCounters = localStorage.getItem('tally_counters_v4');
-    const savedSettings = localStorage.getItem('tally_settings_v4');
-    const savedStats = localStorage.getItem('tally_stats_v4');
+    const savedGroups = localStorage.getItem('newcounter_groups_v4');
+    const savedActiveGroup = localStorage.getItem('newcounter_active_group_v4');
+    const savedCounters = localStorage.getItem('newcounter_counters_v4');
+    const savedSettings = localStorage.getItem('newcounter_settings_v4');
+    const savedStats = localStorage.getItem('newcounter_stats_v4');
 
     if (savedGroups) try { groups = JSON.parse(savedGroups); } catch(e){}
     if (savedActiveGroup && groups.some(g => g.id === savedActiveGroup)) activeGroupId = savedActiveGroup;
@@ -77,11 +77,11 @@ function loadData() {
 }
 
 function saveData() {
-    localStorage.setItem('tally_groups_v4', JSON.stringify(groups));
-    localStorage.setItem('tally_active_group_v4', activeGroupId);
-    localStorage.setItem('tally_counters_v4', JSON.stringify(counters));
-    localStorage.setItem('tally_settings_v4', JSON.stringify(appSettings));
-    localStorage.setItem('tally_stats_v4', JSON.stringify(statsLog));
+    localStorage.setItem('newcounter_groups_v4', JSON.stringify(groups));
+    localStorage.setItem('newcounter_active_group_v4', activeGroupId);
+    localStorage.setItem('newcounter_counters_v4', JSON.stringify(counters));
+    localStorage.setItem('newcounter_settings_v4', JSON.stringify(appSettings));
+    localStorage.setItem('newcounter_stats_v4', JSON.stringify(statsLog));
 }
 
 function updateGroupHeaderTitle() {
@@ -516,7 +516,6 @@ function renderStats() {
     const picker = document.getElementById('stats-date-picker');
     const todayStr = getLocalDateString();
     
-    // Автоматически обновляем дату в пикере наступившего дня, если дата не выбрана пользователем вручную или если наступил новый день
     if (!picker.value || picker.dataset.autoDate === picker.value || picker.value < todayStr) {
         picker.value = todayStr;
         picker.dataset.autoDate = todayStr;
@@ -845,7 +844,7 @@ function exportBackupJSON() {
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tally_backup_all_groups_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `newcounter_backup_all_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -888,7 +887,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     renderCountersList();
 
-    // Инициализируем дату в пикере при запуске приложения
     const picker = document.getElementById('stats-date-picker');
     if (picker) {
         const todayStr = getLocalDateString();
@@ -915,7 +913,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('stats-date-picker').addEventListener('change', (e) => {
-        // Если пользователь явно выбрал дату вручную, снимаем флаг автообновления
         e.target.dataset.autoDate = '';
         renderStats();
     });
