@@ -56,11 +56,12 @@ function getLocalDateString(date = new Date()) {
 }
 
 function loadData() {
-    const savedGroups = localStorage.getItem('newcounter_groups_v4');
-    const savedActiveGroup = localStorage.getItem('newcounter_active_group_v4');
-    const savedCounters = localStorage.getItem('newcounter_counters_v4');
-    const savedSettings = localStorage.getItem('newcounter_settings_v4');
-    const savedStats = localStorage.getItem('newcounter_stats_v4');
+    // Поддержка миграции со старых ключей версий (_v3, _v2, без суффиксов), чтобы не терять данные
+    const savedGroups = localStorage.getItem('newcounter_groups_v4') || localStorage.getItem('newcounter_groups_v3') || localStorage.getItem('newcounter_groups');
+    const savedActiveGroup = localStorage.getItem('newcounter_active_group_v4') || localStorage.getItem('newcounter_active_group_v3') || localStorage.getItem('newcounter_active_group');
+    const savedCounters = localStorage.getItem('newcounter_counters_v4') || localStorage.getItem('newcounter_counters_v3') || localStorage.getItem('newcounter_counters');
+    const savedSettings = localStorage.getItem('newcounter_settings_v4') || localStorage.getItem('newcounter_settings_v3') || localStorage.getItem('newcounter_settings');
+    const savedStats = localStorage.getItem('newcounter_stats_v4') || localStorage.getItem('newcounter_stats_v3') || localStorage.getItem('newcounter_stats');
 
     if (savedGroups) try { groups = JSON.parse(savedGroups); } catch(e){}
     if (savedActiveGroup && groups.some(g => g.id === savedActiveGroup)) activeGroupId = savedActiveGroup;
@@ -514,11 +515,10 @@ function setStatsPeriod(period) {
 
 function renderStats() {
     const picker = document.getElementById('stats-date-picker');
-    const todayStr = getLocalDateString();
     
-    if (!picker.value || picker.dataset.autoDate === picker.value || picker.value < todayStr) {
-        picker.value = todayStr;
-        picker.dataset.autoDate = todayStr;
+    // Если дата в пикере ещё не задана (при первом открытии), ставим сегодняшнюю
+    if (!picker.value) {
+        picker.value = getLocalDateString();
     }
 
     const selectedDate = new Date(picker.value + 'T00:00:00');
@@ -889,9 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const picker = document.getElementById('stats-date-picker');
     if (picker) {
-        const todayStr = getLocalDateString();
-        picker.value = todayStr;
-        picker.dataset.autoDate = todayStr;
+        picker.value = getLocalDateString();
     }
 
     document.getElementById('btn-toggle-groups-menu').addEventListener('click', (e) => {
@@ -912,8 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    document.getElementById('stats-date-picker').addEventListener('change', (e) => {
-        e.target.dataset.autoDate = '';
+    document.getElementById('stats-date-picker').addEventListener('change', () => {
         renderStats();
     });
     document.getElementById('stats-counter-filter').addEventListener('change', renderStats);
