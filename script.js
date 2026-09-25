@@ -47,7 +47,6 @@ let currentFilteredPeriodLogs = [];
 
 let appSettings = { vibration: true, sound: true };
 
-// Вспомогательная функция для получения текущей даты в формате YYYY-MM-DD по местному времени
 function getLocalDateString(date = new Date()) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -56,7 +55,6 @@ function getLocalDateString(date = new Date()) {
 }
 
 function loadData() {
-    // Поддержка миграции со старых ключей версий (_v3, _v2, без суффиксов), чтобы не терять данные
     const savedGroups = localStorage.getItem('newcounter_groups_v4') || localStorage.getItem('newcounter_groups_v3') || localStorage.getItem('newcounter_groups');
     const savedActiveGroup = localStorage.getItem('newcounter_active_group_v4') || localStorage.getItem('newcounter_active_group_v3') || localStorage.getItem('newcounter_active_group');
     const savedCounters = localStorage.getItem('newcounter_counters_v4') || localStorage.getItem('newcounter_counters_v3') || localStorage.getItem('newcounter_counters');
@@ -516,57 +514,57 @@ function setStatsPeriod(period) {
 function renderStats() {
     const picker = document.getElementById('stats-date-picker');
     
-    // Если дата в пикере ещё не задана (при первом открытии), ставим сегодняшнюю
     if (!picker.value) {
         picker.value = getLocalDateString();
     }
 
-    const selectedDate = new Date(picker.value + 'T00:00:00');
+    const selectedDateParts = picker.value.split('-');
+    const year = parseInt(selectedDateParts[0], 10);
+    const month = parseInt(selectedDateParts[1], 10) - 1;
+    const day = parseInt(selectedDateParts[2], 10);
+
     const selectedCounterId = document.getElementById('stats-counter-filter').value;
 
     const groupCounters = counters.filter(c => (c.groupId || 'default') === activeGroupId);
     const activeCounterIds = new Set(groupCounters.map(c => c.id));
     const filteredLog = statsLog.filter(s => activeCounterIds.has(s.counterId) && (selectedCounterId === 'all' || s.counterId === selectedCounterId));
 
-    const totalSumAllTime = filteredLog.reduce((acc, log) => acc + log.delta, 0);
+    // «За всё время» высчитывает абсолютную сумму значений текущих счетчиков группы
+    let totalSumAllTime = 0;
+    if (selectedCounterId === 'all') {
+        totalSumAllTime = groupCounters.reduce((acc, c) => acc + (c.value || 0), 0);
+    } else {
+        const targetCounter = groupCounters.find(c => c.id === selectedCounterId);
+        totalSumAllTime = targetCounter ? (targetCounter.value || 0) : 0;
+    }
     document.getElementById('stat-total-clicks').innerText = Math.max(0, totalSumAllTime);
 
     let periodStartTime = 0;
     let periodEndTime = Date.now();
 
     if (currentStatsPeriod === '1d') {
-        const startOfDay = new Date(selectedDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(selectedDate);
-        endOfDay.setHours(23, 59, 59, 999);
+        const startOfDay = new Date(year, month, day, 0, 0, 0, 0);
+        const endOfDay = new Date(year, month, day, 23, 59, 59, 999);
         periodStartTime = startOfDay.getTime();
         periodEndTime = endOfDay.getTime();
     } else if (currentStatsPeriod === '1w') {
-        const curr = new Date(selectedDate);
-        const day = curr.getDay();
-        const diffToMon = (day === 0 ? -6 : 1 - day);
+        const curr = new Date(year, month, day);
+        const dayOfWeek = curr.getDay();
+        const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
         
-        const monday = new Date(curr);
-        monday.setDate(curr.getDate() + diffToMon);
-        monday.setHours(0, 0, 0, 0);
-
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        sunday.setHours(23, 59, 59, 999);
+        const monday = new Date(year, month, day + diffToMon, 0, 0, 0, 0);
+        const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 23, 59, 59, 999);
 
         periodStartTime = monday.getTime();
         periodEndTime = sunday.getTime();
     } else if (currentStatsPeriod === '1m') {
-        const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1, 0, 0, 0, 0);
-        const endOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 23, 59, 59, 999);
+        const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
         periodStartTime = startOfMonth.getTime();
         periodEndTime = endOfMonth.getTime();
     } else if (currentStatsPeriod === '6m') {
-        const year = selectedDate.getFullYear();
-        const currentMonth = selectedDate.getMonth();
         let startMonth, endMonth;
-        
-        if (currentMonth <= 5) {
+        if (month <= 5) {
             startMonth = 0;
             endMonth = 5;
         } else {
@@ -579,8 +577,8 @@ function renderStats() {
         periodStartTime = startOf6m.getTime();
         periodEndTime = endOf6m.getTime();
     } else if (currentStatsPeriod === '1y') {
-        const startOfYear = new Date(selectedDate.getFullYear(), 0, 1, 0, 0, 0, 0);
-        const endOfYear = new Date(selectedDate.getFullYear(), 11, 31, 23, 59, 59, 999);
+        const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
+        const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
         periodStartTime = startOfYear.getTime();
         periodEndTime = endOfYear.getTime();
     } else if (currentStatsPeriod === 'all') {
@@ -589,8 +587,10 @@ function renderStats() {
     }
 
     currentFilteredPeriodLogs = filteredLog.filter(s => s.timestamp >= periodStartTime && s.timestamp <= periodEndTime);
+    
+    // ИСПРАВЛЕНИЕ: Точный суммарный баланс за период (учитывает и + и -)
     const selectedPeriodSum = currentFilteredPeriodLogs.reduce((acc, log) => acc + log.delta, 0);
-    document.getElementById('stat-selected-period-sum').innerText = Math.max(0, selectedPeriodSum);
+    document.getElementById('stat-selected-period-sum').innerText = selectedPeriodSum;
 
     const hourCounts = {};
     currentFilteredPeriodLogs.forEach(log => {
@@ -601,14 +601,13 @@ function renderStats() {
     let peakHour = null;
     let maxCount = 0;
     for (const [hour, count] of Object.entries(hourCounts)) {
-        const actualCount = Math.max(0, count);
-        if (actualCount > maxCount) {
-            maxCount = actualCount;
+        if (count > maxCount) {
+            maxCount = count;
             peakHour = hour;
         }
     }
 
-    if (peakHour !== null) {
+    if (peakHour !== null && maxCount > 0) {
         const hourFormatted = `${peakHour.toString().padStart(2, '0')}:00 - ${(parseInt(peakHour) + 1).toString().padStart(2, '0')}:00`;
         document.getElementById('stat-peak-hour').innerText = hourFormatted;
         document.getElementById('stat-peak-count').innerText = `${maxCount} нажатий`;
@@ -647,7 +646,7 @@ function renderStats() {
         });
     }
 
-    renderChart(currentFilteredPeriodLogs, periodStartTime, periodEndTime, selectedDate);
+    renderChart(currentFilteredPeriodLogs, periodStartTime, periodEndTime, year, month, day);
 }
 
 function openFullHistoryModal() {
@@ -690,7 +689,7 @@ function closeFullHistoryModal() {
     document.getElementById('modal-full-history').classList.add('hidden');
 }
 
-function renderChart(logs, startTime, endTime, selectedDate) {
+function renderChart(logs, startTime, endTime, year, month, day) {
     const ctx = document.getElementById('statsChart').getContext('2d');
     const chartTitle = document.getElementById('chart-title');
     
@@ -704,7 +703,7 @@ function renderChart(logs, startTime, endTime, selectedDate) {
             const count = logs
                 .filter(s => new Date(s.timestamp).getHours() === i)
                 .reduce((acc, l) => acc + l.delta, 0);
-            sums.push(Math.max(0, count));
+            sums.push(count);
         }
     } else if (currentStatsPeriod === '1w') {
         chartTitle.innerText = 'Динамика за неделю';
@@ -712,8 +711,7 @@ function renderChart(logs, startTime, endTime, selectedDate) {
         const startDate = new Date(startTime);
 
         for (let i = 0; i < 7; i++) {
-            const d = new Date(startDate);
-            d.setDate(startDate.getDate() + i);
+            const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
             const dayStr = d.toDateString();
             
             const dayNum = d.getDate();
@@ -723,58 +721,86 @@ function renderChart(logs, startTime, endTime, selectedDate) {
             const daySum = logs
                 .filter(s => new Date(s.timestamp).toDateString() === dayStr)
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(Math.max(0, daySum));
+            sums.push(daySum);
         }
     } else if (currentStatsPeriod === '1m') {
         chartTitle.innerText = 'Динамика по дням';
-        const daysInMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
-        for (let day = 1; day <= daysInMonth; day++) {
-            const d = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let dNum = 1; dNum <= daysInMonth; dNum++) {
+            const d = new Date(year, month, dNum);
             const dayStr = d.toDateString();
             labels.push(d.toLocaleDateString([], { day: 'numeric', month: 'short' }));
             
             const daySum = logs
                 .filter(s => new Date(s.timestamp).toDateString() === dayStr)
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(Math.max(0, daySum));
+            sums.push(daySum);
         }
-    } else {
-        if (currentStatsPeriod === '1y') {
-            chartTitle.innerText = 'Динамика по месяцам (Год)';
-            const year = selectedDate.getFullYear();
-            for (let m = 0; m < 12; m++) {
-                const d = new Date(year, m, 1);
-                const monthKey = `${year}-${m}`;
-                labels.push(d.toLocaleDateString([], { month: 'short' }));
-                
-                const monthSum = logs
-                    .filter(s => {
-                        const sd = new Date(s.timestamp);
-                        return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
-                    })
-                    .reduce((acc, log) => acc + log.delta, 0);
-                sums.push(Math.max(0, monthSum));
-            }
+    } else if (currentStatsPeriod === '6m') {
+        let startMonth = (month <= 5) ? 0 : 6;
+        chartTitle.innerText = startMonth === 0 ? 'Динамика (Янв – Июн)' : 'Динамика (Июл – Дек)';
+        
+        for (let i = 0; i < 6; i++) {
+            const m = startMonth + i;
+            const d = new Date(year, m, 1);
+            const monthKey = `${year}-${m}`;
+            labels.push(d.toLocaleDateString([], { month: 'short' }));
+            
+            const monthSum = logs
+                .filter(s => {
+                    const sd = new Date(s.timestamp);
+                    return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
+                })
+                .reduce((acc, log) => acc + log.delta, 0);
+            sums.push(monthSum);
+        }
+    } else if (currentStatsPeriod === '1y') {
+        chartTitle.innerText = 'Динамика по месяцам (Год)';
+        for (let m = 0; m < 12; m++) {
+            const d = new Date(year, m, 1);
+            const monthKey = `${year}-${m}`;
+            labels.push(d.toLocaleDateString([], { month: 'short' }));
+            
+            const monthSum = logs
+                .filter(s => {
+                    const sd = new Date(s.timestamp);
+                    return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
+                })
+                .reduce((acc, log) => acc + log.delta, 0);
+            sums.push(monthSum);
+        }
+    } else if (currentStatsPeriod === 'all') {
+        chartTitle.innerText = 'Вся история активности';
+        if (logs.length === 0) {
+            labels = ['Нет данных'];
+            sums = [0];
         } else {
-            const year = selectedDate.getFullYear();
-            const currentMonth = selectedDate.getMonth();
-            let startMonth = (currentMonth <= 5) ? 0 : 6;
-            
-            chartTitle.innerText = startMonth === 0 ? 'Динамика (Янв – Июн)' : 'Динамика (Июл – Дек)';
-            
-            for (let i = 0; i < 6; i++) {
-                const m = startMonth + i;
-                const d = new Date(year, m, 1);
-                const monthKey = `${year}-${m}`;
-                labels.push(d.toLocaleDateString([], { month: 'short' }));
-                
-                const monthSum = logs
-                    .filter(s => {
-                        const sd = new Date(s.timestamp);
-                        return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
-                    })
-                    .reduce((acc, log) => acc + log.delta, 0);
-                sums.push(Math.max(0, monthSum));
+            const timestamps = logs.map(l => l.timestamp);
+            const minYear = new Date(Math.min(...timestamps)).getFullYear();
+            const maxYear = new Date(Math.max(...timestamps)).getFullYear();
+
+            if (minYear === maxYear) {
+                for (let m = 0; m < 12; m++) {
+                    const d = new Date(minYear, m, 1);
+                    const monthKey = `${minYear}-${m}`;
+                    labels.push(d.toLocaleDateString([], { month: 'short' }));
+                    
+                    const monthSum = logs
+                        .filter(s => {
+                            const sd = new Date(s.timestamp);
+                            return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
+                        })
+                        .reduce((acc, log) => acc + log.delta, 0);
+                    sums.push(monthSum);
+                }
+            } else {
+                for (let y = minYear; y <= maxYear; y++) {
+                    labels.push(`${y}`);
+                    const yearSum = logs
+                        .filter(s => new Date(s.timestamp).getFullYear() === y)
+                        .reduce((acc, log) => acc + log.delta, 0);
+                    sums.push(yearSum);
+                }
             }
         }
     }
@@ -820,8 +846,7 @@ function renderChart(logs, startTime, endTime, selectedDate) {
                 },
                 y: { 
                     grid: { color: '#27272a' }, 
-                    ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 },
-                    min: 0
+                    ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 }
                 }
             }
         }
