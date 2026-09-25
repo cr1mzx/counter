@@ -171,14 +171,6 @@ function checkAutoResets() {
         else if (c.resetPeriod === 'yearly' && now.getFullYear() !== last.getFullYear()) shouldReset = true;
 
         if (shouldReset) {
-            if (c.value !== 0) {
-                statsLog.push({
-                    counterId: c.id,
-                    groupId: c.groupId || 'default',
-                    timestamp: Date.now(),
-                    delta: -c.value
-                });
-            }
             c.value = 0;
             c.lastReset = Date.now();
             changed = true;
@@ -403,7 +395,8 @@ function changeCounterValue(id, delta) {
             counterId: counter.id,
             groupId: counter.groupId || 'default',
             timestamp: Date.now(),
-            delta: actualDelta
+            delta: actualDelta,
+            isUserAction: true
         });
     }
     saveData();
@@ -527,15 +520,13 @@ function renderStats() {
 
     const groupCounters = counters.filter(c => (c.groupId || 'default') === activeGroupId);
     const activeCounterIds = new Set(groupCounters.map(c => c.id));
-    const filteredLog = statsLog.filter(s => activeCounterIds.has(s.counterId) && (selectedCounterId === 'all' || s.counterId === selectedCounterId));
+    
+    const filteredLog = statsLog.filter(s => 
+        activeCounterIds.has(s.counterId) && 
+        (selectedCounterId === 'all' || s.counterId === selectedCounterId)
+    );
 
-    let totalSumAllTime = 0;
-    if (selectedCounterId === 'all') {
-        totalSumAllTime = groupCounters.reduce((acc, c) => acc + (c.value || 0), 0);
-    } else {
-        const targetCounter = groupCounters.find(c => c.id === selectedCounterId);
-        totalSumAllTime = targetCounter ? (targetCounter.value || 0) : 0;
-    }
+    let totalSumAllTime = filteredLog.reduce((acc, log) => acc + log.delta, 0);
     document.getElementById('stat-total-clicks').innerText = Math.max(0, totalSumAllTime);
 
     let periodStartTime = 0;
@@ -588,7 +579,7 @@ function renderStats() {
     currentFilteredPeriodLogs = filteredLog.filter(s => s.timestamp >= periodStartTime && s.timestamp <= periodEndTime);
     
     const selectedPeriodSum = currentFilteredPeriodLogs.reduce((acc, log) => acc + log.delta, 0);
-    document.getElementById('stat-selected-period-sum').innerText = selectedPeriodSum;
+    document.getElementById('stat-selected-period-sum').innerText = Math.max(0, selectedPeriodSum);
 
     const hourCounts = {};
     currentFilteredPeriodLogs.forEach(log => {
@@ -701,7 +692,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
             const count = logs
                 .filter(s => new Date(s.timestamp).getHours() === i)
                 .reduce((acc, l) => acc + l.delta, 0);
-            sums.push(count);
+            sums.push(Math.max(0, count));
         }
     } else if (currentStatsPeriod === '1w') {
         chartTitle.innerText = 'Динамика за неделю';
@@ -719,7 +710,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
             const daySum = logs
                 .filter(s => new Date(s.timestamp).toDateString() === dayStr)
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(daySum);
+            sums.push(Math.max(0, daySum));
         }
     } else if (currentStatsPeriod === '1m') {
         chartTitle.innerText = 'Динамика по дням';
@@ -732,7 +723,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
             const daySum = logs
                 .filter(s => new Date(s.timestamp).toDateString() === dayStr)
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(daySum);
+            sums.push(Math.max(0, daySum));
         }
     } else if (currentStatsPeriod === '6m') {
         let startMonth = (month <= 5) ? 0 : 6;
@@ -750,7 +741,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
                     return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
                 })
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(monthSum);
+            sums.push(Math.max(0, monthSum));
         }
     } else if (currentStatsPeriod === '1y') {
         chartTitle.innerText = 'Динамика по месяцам (Год)';
@@ -765,7 +756,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
                     return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
                 })
                 .reduce((acc, log) => acc + log.delta, 0);
-            sums.push(monthSum);
+            sums.push(Math.max(0, monthSum));
         }
     } else if (currentStatsPeriod === 'all') {
         chartTitle.innerText = 'Вся история активности';
@@ -789,7 +780,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
                             return `${sd.getFullYear()}-${sd.getMonth()}` === monthKey;
                         })
                         .reduce((acc, log) => acc + log.delta, 0);
-                    sums.push(monthSum);
+                    sums.push(Math.max(0, monthSum));
                 }
             } else {
                 for (let y = minYear; y <= maxYear; y++) {
@@ -797,7 +788,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
                     const yearSum = logs
                         .filter(s => new Date(s.timestamp).getFullYear() === y)
                         .reduce((acc, log) => acc + log.delta, 0);
-                    sums.push(yearSum);
+                    sums.push(Math.max(0, yearSum));
                 }
             }
         }
@@ -843,6 +834,7 @@ function renderChart(logs, startTime, endTime, year, month, day) {
                     ticks: { color: '#a1a1aa', font: { size: 9 } } 
                 },
                 y: { 
+                    min: 0,
                     grid: { color: '#27272a' }, 
                     ticks: { color: '#a1a1aa', font: { size: 9 }, precision: 0 }
                 }
@@ -966,14 +958,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Сбросить счётчик?')) {
             const counter = counters.find(c => c.id === activeCounterId);
             if (counter) {
-                if (counter.value !== 0) {
-                    statsLog.push({
-                        counterId: counter.id,
-                        groupId: counter.groupId || 'default',
-                        timestamp: Date.now(),
-                        delta: -counter.value
-                    });
-                }
                 counter.value = 0;
                 saveData();
                 triggerFeedback();
@@ -1062,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 color: selectedColorTheme,
                 lastReset: Date.now()
             });
-            if (val !== 0) {
+            if (val > 0) {
                 statsLog.push({
                     counterId: newId,
                     groupId: activeGroupId,
