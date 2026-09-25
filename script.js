@@ -529,7 +529,6 @@ function renderStats() {
     const activeCounterIds = new Set(groupCounters.map(c => c.id));
     const filteredLog = statsLog.filter(s => activeCounterIds.has(s.counterId) && (selectedCounterId === 'all' || s.counterId === selectedCounterId));
 
-    // «За всё время» высчитывает абсолютную сумму значений текущих счетчиков группы
     let totalSumAllTime = 0;
     if (selectedCounterId === 'all') {
         totalSumAllTime = groupCounters.reduce((acc, c) => acc + (c.value || 0), 0);
@@ -588,7 +587,6 @@ function renderStats() {
 
     currentFilteredPeriodLogs = filteredLog.filter(s => s.timestamp >= periodStartTime && s.timestamp <= periodEndTime);
     
-    // ИСПРАВЛЕНИЕ: Точный суммарный баланс за период (учитывает и + и -)
     const selectedPeriodSum = currentFilteredPeriodLogs.reduce((acc, log) => acc + log.delta, 0);
     document.getElementById('stat-selected-period-sum').innerText = selectedPeriodSum;
 
